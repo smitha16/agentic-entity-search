@@ -1,4 +1,6 @@
-// server/services/reflector.js — NEW FILE
+// Reflection service. After the first extraction pass, this asks the LLM
+// whether the current results are satisfactory or if additional follow-up
+// queries should be run to find missing entities or fill empty columns.
 
 import OpenAI from 'openai';
 import { config } from '../config.js';
@@ -29,8 +31,10 @@ If the results are good enough, return:
 
 Return valid JSON only. No markdown fences.`;
 
+// Evaluates the current set of extracted entities. If coverage is below
+// threshold, asks the LLM for follow-up queries to improve results.
 export async function reflectOnResults({ topic, entityType, columns, rows, maxEntities }) {
-  // Don't reflect if we already have plenty of high-quality results
+  // Skip reflection if results already meet both quantity and quality thresholds.
   const filledRatio = rows.reduce((sum, row) => {
     const filled = columns.filter((col) => row.cells[col]?.value).length;
     return sum + filled / columns.length;

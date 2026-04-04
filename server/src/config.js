@@ -1,4 +1,7 @@
-// server/src/config.js
+// Centralized configuration. Loads environment variables from .env,
+// auto-detects the search provider (Brave or Tavily) and LLM provider
+// (Gemini, Groq, OpenAI, or OpenRouter), and exports a single config
+// object with helpers for checking key availability.
 
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +23,7 @@ for (const envPath of candidateEnvPaths) {
   }
 }
 
+// Determines which search provider to use based on environment variables.
 function resolveSearchProvider() {
   if (process.env.SEARCH_PROVIDER) {
     return process.env.SEARCH_PROVIDER;
@@ -32,8 +36,7 @@ function resolveSearchProvider() {
   return 'brave';
 }
 
-// ─── CHANGED: now detects Gemini and Groq as well ───
-
+// Determines which LLM provider to use by checking for provider-specific API keys.
 function resolveLlmProvider() {
   if (process.env.LLM_PROVIDER) {
     return process.env.LLM_PROVIDER;
@@ -55,8 +58,7 @@ function resolveLlmProvider() {
   return 'openai-compatible';
 }
 
-// ─── CHANGED: resolves the correct base URL per provider ───
-
+// Returns the base URL for the detected LLM provider's OpenAI-compatible endpoint.
 function resolveLlmBaseUrl(provider) {
   // Explicit env var always wins
   if (process.env.LLM_BASE_URL) {
@@ -75,8 +77,7 @@ function resolveLlmBaseUrl(provider) {
   }
 }
 
-// ─── CHANGED: resolves the correct API key per provider ───
-
+// Returns the API key for the detected LLM provider.
 function resolveLlmApiKey(provider) {
   // Explicit LLM_API_KEY always wins
   if (process.env.LLM_API_KEY) {
@@ -95,8 +96,7 @@ function resolveLlmApiKey(provider) {
   }
 }
 
-// ─── CHANGED: resolves the correct default model per provider ───
-
+// Returns the default model name for the detected LLM provider.
 function resolveLlmModel(provider) {
   // Explicit env var always wins
   if (process.env.LLM_MODEL) {
@@ -135,7 +135,7 @@ export const config = {
   llmModel: resolveLlmModel(llmProvider),
   llmBaseUrl: resolveLlmBaseUrl(llmProvider),
 
-  // ─── NEW: individual keys stored for multi-provider fallback ───
+  // Individual provider keys for potential multi-provider fallback
   geminiApiKey: process.env.GEMINI_API_KEY || '',
   groqApiKey: process.env.GROQ_API_KEY || '',
 
@@ -144,6 +144,7 @@ export const config = {
   openRouterAppName: process.env.OPENROUTER_APP_NAME || 'agentic-entity-search'
 };
 
+// Returns the API key for the currently configured search provider.
 export function getSearchApiKey() {
   if (config.searchProvider === 'tavily') {
     return config.tavilyApiKey;
@@ -156,10 +157,12 @@ export function getSearchApiKey() {
   return '';
 }
 
+// Returns true if a search API key is configured.
 export function hasSearchConfig() {
   return Boolean(getSearchApiKey());
 }
 
+// Returns true if an LLM API key is configured.
 export function hasLlmConfig() {
   return Boolean(config.llmApiKey);
 }

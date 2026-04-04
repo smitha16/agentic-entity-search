@@ -1,8 +1,13 @@
+// Search provider abstraction. Supports Brave and Tavily search APIs.
+// Runs all generated queries in parallel, deduplicates by URL, and returns
+// a flat list of search result objects.
+
 import { config, getSearchApiKey, hasSearchConfig } from '../config.js';
 import { HttpError } from '../utils/httpError.js';
 
 const SEARCH_TIMEOUT_MS = 12000;
 
+// Strips the URL hash fragment and returns a canonical string, or null if invalid.
 function normalizeUrl(rawUrl) {
   try {
     const url = new URL(rawUrl);
@@ -13,6 +18,7 @@ function normalizeUrl(rawUrl) {
   }
 }
 
+// Wraps a fetch error into a 502 HttpError with a descriptive message.
 function toSearchFetchError(providerName, error) {
   const reason = error?.cause?.code === 'UND_ERR_CONNECT_TIMEOUT'
     ? 'connection timed out'
@@ -21,6 +27,7 @@ function toSearchFetchError(providerName, error) {
   return new HttpError(502, `${providerName} search request failed: ${reason}`);
 }
 
+// Calls the Brave Web Search API and returns the raw result array.
 async function searchWithBrave(query, limitPerQuery) {
   let response;
 
@@ -48,6 +55,7 @@ async function searchWithBrave(query, limitPerQuery) {
   return json.web?.results || [];
 }
 
+// Calls the Tavily Search API and returns the raw result array.
 async function searchWithTavily(query, limitPerQuery) {
   let response;
 
@@ -79,8 +87,8 @@ async function searchWithTavily(query, limitPerQuery) {
   return json.results || [];
 }
 
-// In searchProvider.js, update searchWeb:
-
+// Runs all queries against the configured search provider, deduplicates URLs,
+// and returns a flat array of { query, rank, title, url, snippet, sourceType }.
 export async function searchWeb(queries, limitPerQuery = 5) {
   if (!hasSearchConfig()) {
     throw new HttpError(500, 'Missing search API key');
@@ -88,7 +96,6 @@ export async function searchWeb(queries, limitPerQuery = 5) {
 
   const searchFn = config.searchProvider === 'tavily' ? searchWithTavily : searchWithBrave;
 
-  // Run all queries in parallel
   const allResults = await Promise.allSettled(
     queries.map((query) => searchFn(query, limitPerQuery))
   );

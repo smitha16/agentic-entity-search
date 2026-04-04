@@ -1,4 +1,6 @@
-// server/src/utils/retryWithBackoff.js
+// Retries an async function with exponential backoff when it receives a
+// 429 (rate limited) response. Gives up after the configured number of
+// retries and re-throws the original error.
 
 const DEFAULT_MAX_RETRIES = 4;
 const DEFAULT_BASE_DELAY_MS = 2000;

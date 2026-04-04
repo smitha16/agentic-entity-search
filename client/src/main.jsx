@@ -1,3 +1,5 @@
+// Application entry point. Mounts the root React component into the DOM.
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 
