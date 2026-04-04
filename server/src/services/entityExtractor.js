@@ -3,9 +3,12 @@ import pLimit from 'p-limit';
 
 import { config, hasLlmConfig } from '../config.js';
 import { HttpError } from '../utils/httpError.js';
+import { retryWithBackoff } from '../utils/retryWithBackoff.js';
+import { throttleLlm } from '../utils/llmThrottle.js';
+import { chunkPage } from './chunker.js';
 
 const EXTRACTION_TIMEOUT_MS = 25000;
-const extractionLimit = pLimit(2);
+const extractionLimit = pLimit(1);
 
 function buildLlmClient() {
   if (!hasLlmConfig()) {
@@ -61,7 +64,21 @@ function safeJsonParse(text) {
 }
 
 function ensureCell(cell, fallbackSource) {
-  if (!cell || typeof cell !== 'object' || !cell.value) {
+  if (cell == null) {
+    return null;
+  }
+
+  // Handle plain string/number values from LLMs that don't follow the nested format
+  if (typeof cell !== 'object') {
+    const value = String(cell).trim();
+    if (!value) return null;
+    return {
+      value,
+      sources: [fallbackSource]
+    };
+  }
+
+  if (!cell.value) {
     return null;
   }
 
@@ -106,23 +123,31 @@ async function extractFromPageWithOpenAi({ topic, entityType, columns, page }) {
   }
 
   let completion;
+  const llmStart = Date.now();
+  console.log(`[entityExtractor] Sending chunk to LLM: ${page.chunk_id || page.url} (${page.content.length} chars)`);
+
+  await throttleLlm();
 
   try {
-    completion = await llmClient.chat.completions.create({
-      model: config.llmModel,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a precise information extraction system.'
-        },
-        {
-          role: 'user',
-          content: buildPrompt({ topic, entityType, columns, page })
-        }
-      ],
-      temperature: 0.1
-    });
+    completion = await retryWithBackoff(
+      () => llmClient.chat.completions.create({
+        model: config.llmModel,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a precise information extraction system.'
+          },
+          {
+            role: 'user',
+            content: buildPrompt({ topic, entityType, columns, page })
+          }
+        ],
+        temperature: 0.1
+      }),
+      { label: `extract:${page.url}` }
+    );
   } catch (error) {
+    console.warn(`[entityExtractor] LLM call failed after ${Date.now() - llmStart}ms: ${error.message}`);
     const isTimeout = error?.name === 'AbortError' || error?.status === 408 || /timeout/i.test(error?.message || '');
 
     if (isTimeout) {
@@ -132,10 +157,12 @@ async function extractFromPageWithOpenAi({ topic, entityType, columns, page }) {
     throw new HttpError(error?.status || 502, error?.message || 'LLM extraction failed');
   }
 
+  console.log(`[entityExtractor] LLM responded in ${Date.now() - llmStart}ms for ${page.chunk_id || page.url}`);
   const content = completion.choices[0]?.message?.content || '{}';
   const parsed = safeJsonParse(content);
 
   if (!parsed || !Array.isArray(parsed.entities)) {
+    console.warn(`[entityExtractor] No entities parsed from ${page.chunk_id || page.url}`);
     return [];
   }
 
@@ -147,23 +174,41 @@ async function extractFromPageWithOpenAi({ topic, entityType, columns, page }) {
     confidence: 0.8
   };
 
-  return parsed.entities
+  const entities = parsed.entities
     .map((entity) => normalizeEntity(entity, columns, fallbackSource))
     .filter(Boolean);
+
+  console.log(`[entityExtractor] Extracted ${entities.length} entities from ${page.chunk_id || page.url}`);
+  return entities;
 }
 
 export async function extractEntities({ topic, entityType, columns, pages }) {
+  // Flatten pages into chunks, cap at 6 to keep total time reasonable on free-tier LLMs
+  const MAX_CHUNKS = 6;
+  const allChunks = pages.flatMap((page) => chunkPage(page)).slice(0, MAX_CHUNKS);
+  console.log(`[entityExtractor] Processing ${allChunks.length} chunks from ${pages.length} pages (capped at ${MAX_CHUNKS})`);
+
+  let completed = 0;
   const settledExtractions = await Promise.all(
-    pages.map((page) =>
+    allChunks.map((chunk) =>
       extractionLimit(async () => {
         try {
-          return await extractFromPageWithOpenAi({ topic, entityType, columns, page });
-        } catch {
+          const result = await extractFromPageWithOpenAi({
+            topic, entityType, columns, page: chunk
+          });
+          completed++;
+          console.log(`[entityExtractor] Progress: ${completed}/${allChunks.length} chunks done`);
+          return result;
+        } catch (error) {
+          completed++;
+          console.warn(`[entityExtractor] Chunk ${completed}/${allChunks.length} failed for ${chunk.url}: ${error.message}`);
           return [];
         }
       })
     )
   );
 
-  return settledExtractions.flat();
+  const total = settledExtractions.flat();
+  console.log(`[entityExtractor] Finished: ${total.length} entities from ${allChunks.length} chunks`);
+  return total;
 }

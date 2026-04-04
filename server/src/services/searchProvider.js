@@ -79,34 +79,34 @@ async function searchWithTavily(query, limitPerQuery) {
   return json.results || [];
 }
 
+// In searchProvider.js, update searchWeb:
+
 export async function searchWeb(queries, limitPerQuery = 5) {
   if (!hasSearchConfig()) {
-    throw new HttpError(500, 'Missing search API key for the configured provider');
+    throw new HttpError(500, 'Missing search API key');
   }
+
+  const searchFn = config.searchProvider === 'tavily' ? searchWithTavily : searchWithBrave;
+
+  // Run all queries in parallel
+  const allResults = await Promise.allSettled(
+    queries.map((query) => searchFn(query, limitPerQuery))
+  );
 
   const results = [];
   const seen = new Set();
 
-  for (const query of queries) {
-    let webResults;
+  for (let qi = 0; qi < queries.length; qi++) {
+    const settled = allResults[qi];
+    if (settled.status !== 'fulfilled') continue;
 
-    if (config.searchProvider === 'tavily') {
-      webResults = await searchWithTavily(query, limitPerQuery);
-    } else if (config.searchProvider === 'brave') {
-      webResults = await searchWithBrave(query, limitPerQuery);
-    } else {
-      throw new HttpError(500, `Unsupported search provider: ${config.searchProvider}`);
-    }
-
-    for (const [index, item] of webResults.entries()) {
+    for (const [index, item] of settled.value.entries()) {
       const normalized = normalizeUrl(item.url);
-      if (!normalized || seen.has(normalized)) {
-        continue;
-      }
+      if (!normalized || seen.has(normalized)) continue;
 
       seen.add(normalized);
       results.push({
-        query,
+        query: queries[qi],
         rank: index + 1,
         title: item.title || normalized,
         url: normalized,
