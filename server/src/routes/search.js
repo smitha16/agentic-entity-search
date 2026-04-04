@@ -1,13 +1,11 @@
-// Search API routes. Provides two endpoints:
-//   POST /         - synchronous JSON response
-//   POST /stream   - SSE streaming with per-step progress events
-// Both validate the request payload, run the search pipeline, and return
-// structured entity results.
+// Search API route. Provides the SSE streaming endpoint POST /stream that
+// validates the request payload, runs the search pipeline, and sends per-step
+// progress events followed by the final structured entity results.
 
 import { Router } from 'express';
 import { z } from 'zod';
 
-import { runSearchPipeline, runSearchPipelineWithEvents } from '../services/searchPipeline.js';
+import { runSearchPipelineWithEvents } from '../services/searchPipeline.js';
 import { HttpError } from '../utils/httpError.js';
 
 const router = Router();
@@ -16,21 +14,6 @@ const requestSchema = z.object({
   topic: z.string().trim().min(3),
   maxEntities: z.number().int().min(1).max(25).optional(),
   entityType: z.string().trim().min(2).max(50).optional()
-});
-
-// Synchronous search endpoint. Returns the full result as a single JSON response.
-router.post('/', async (req, res, next) => {
-  try {
-    const payload = requestSchema.parse(req.body);
-    const result = await runSearchPipeline(payload);
-    res.json(result);
-  } catch (error) {
-    if (error.name === 'ZodError') {
-      next(new HttpError(400, 'Invalid request payload'));
-      return;
-    }
-    next(error);
-  }
 });
 
 // SSE streaming endpoint. Sends per-step progress events and a final result
