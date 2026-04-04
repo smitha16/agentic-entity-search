@@ -1,23 +1,8 @@
-// API client. Provides two ways to call the search endpoint:
-//   searchEntities()       - single JSON request/response (fallback)
-//   searchEntitiesStream() - SSE streaming with per-step progress callbacks
+// API client. Calls the SSE streaming search endpoint and dispatches
+// per-step progress, result, and error events via callbacks.
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 const REQUEST_TIMEOUT_MS = 600000; // 10 minutes for free-tier LLM pipelines
-
-// Sends a synchronous search request and returns the full JSON result.
-export async function searchEntities(payload) {
-  const response = await fetch(`${API_URL}/api/search`, {
-    method: 'POST',
-    signal: AbortSignal.timeout(60000),
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-
-  const json = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(json?.error || 'Request failed');
-  return json;
-}
 
 // Opens an SSE stream to the search endpoint and dispatches events to the
 // provided callbacks: onStep for progress, onResult for the final data,
