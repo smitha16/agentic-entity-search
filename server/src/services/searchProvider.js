@@ -1,0 +1,120 @@
+import { config, getSearchApiKey, hasSearchConfig } from '../config.js';
+import { HttpError } from '../utils/httpError.js';
+
+const SEARCH_TIMEOUT_MS = 12000;
+
+function normalizeUrl(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function toSearchFetchError(providerName, error) {
+  const reason = error?.cause?.code === 'UND_ERR_CONNECT_TIMEOUT'
+    ? 'connection timed out'
+    : error?.message || 'request failed';
+
+  return new HttpError(502, `${providerName} search request failed: ${reason}`);
+}
+
+async function searchWithBrave(query, limitPerQuery) {
+  let response;
+
+  try {
+    const url = new URL('https://api.search.brave.com/res/v1/web/search');
+    url.searchParams.set('q', query);
+    url.searchParams.set('count', String(limitPerQuery));
+
+    response = await fetch(url, {
+      signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+      headers: {
+        Accept: 'application/json',
+        'X-Subscription-Token': getSearchApiKey()
+      }
+    });
+  } catch (error) {
+    throw toSearchFetchError('Brave', error);
+  }
+
+  if (!response.ok) {
+    throw new HttpError(502, `Brave search failed with status ${response.status}`);
+  }
+
+  const json = await response.json();
+  return json.web?.results || [];
+}
+
+async function searchWithTavily(query, limitPerQuery) {
+  let response;
+
+  try {
+    response = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        api_key: getSearchApiKey(),
+        query,
+        search_depth: 'basic',
+        max_results: limitPerQuery,
+        include_answer: false,
+        include_raw_content: false
+      })
+    });
+  } catch (error) {
+    throw toSearchFetchError('Tavily', error);
+  }
+
+  if (!response.ok) {
+    throw new HttpError(502, `Tavily search failed with status ${response.status}`);
+  }
+
+  const json = await response.json();
+  return json.results || [];
+}
+
+export async function searchWeb(queries, limitPerQuery = 5) {
+  if (!hasSearchConfig()) {
+    throw new HttpError(500, 'Missing search API key for the configured provider');
+  }
+
+  const results = [];
+  const seen = new Set();
+
+  for (const query of queries) {
+    let webResults;
+
+    if (config.searchProvider === 'tavily') {
+      webResults = await searchWithTavily(query, limitPerQuery);
+    } else if (config.searchProvider === 'brave') {
+      webResults = await searchWithBrave(query, limitPerQuery);
+    } else {
+      throw new HttpError(500, `Unsupported search provider: ${config.searchProvider}`);
+    }
+
+    for (const [index, item] of webResults.entries()) {
+      const normalized = normalizeUrl(item.url);
+      if (!normalized || seen.has(normalized)) {
+        continue;
+      }
+
+      seen.add(normalized);
+      results.push({
+        query,
+        rank: index + 1,
+        title: item.title || normalized,
+        url: normalized,
+        snippet: item.description || item.content || '',
+        sourceType: config.searchProvider
+      });
+    }
+  }
+
+  return results;
+}
