@@ -1,4 +1,5 @@
-// client/src/App.jsx
+// Root application component. Renders the search form, streams pipeline
+// progress events from the server, and displays the results table.
 
 import { useState } from 'react';
 
@@ -19,6 +20,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Submits the search topic and streams real-time pipeline events.
   async function handleSubmit(event) {
     event.preventDefault();
     setLoading(true);

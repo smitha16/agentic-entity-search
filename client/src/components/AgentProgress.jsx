@@ -1,4 +1,5 @@
-// client/src/components/AgentProgress.jsx
+// Displays a live list of pipeline step events while the search is running.
+// Each step shows an icon and a descriptive message.
 
 const STEP_ICONS = {
   schema: '🧠',
@@ -15,6 +16,7 @@ const STEP_ICONS = {
   complete: '✅'
 };
 
+// Renders the ordered list of pipeline steps received via SSE.
 export function AgentProgress({ steps }) {
   if (steps.length === 0) return null;
 

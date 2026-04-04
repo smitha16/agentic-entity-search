@@ -1,8 +1,11 @@
-// server/services/chunker.js — NEW FILE
+// Text chunking utility. Splits long page content into overlapping chunks so
+// that each fits within the LLM context window. Tries to break at sentence or
+// paragraph boundaries to keep chunks coherent.
 
 const DEFAULT_CHUNK_SIZE = 3000;  // characters (~750 tokens)
 const DEFAULT_OVERLAP = 400;
 
+// Splits a text string into overlapping chunks of roughly chunkSize characters.
 export function chunkText(text, { chunkSize = DEFAULT_CHUNK_SIZE, overlap = DEFAULT_OVERLAP } = {}) {
   if (text.length <= chunkSize) {
     return [text];
@@ -30,6 +33,8 @@ export function chunkText(text, { chunkSize = DEFAULT_CHUNK_SIZE, overlap = DEFA
   return chunks;
 }
 
+// Chunks a page object and returns an array of page-like objects, each with
+// its own chunk_id, chunkIndex, and totalChunks metadata.
 export function chunkPage(page) {
   const chunks = chunkText(page.content);
 

@@ -1,3 +1,4 @@
+// Renders a single table cell value with an expandable sources list.
 function Cell({ cell }) {
   if (!cell) {
     return <span className="muted">-</span>;
@@ -23,6 +24,8 @@ function Cell({ cell }) {
   );
 }
 
+// Displays the entity results as a table with metadata (topic, entity type,
+// page count, latency) and per-cell source attribution.
 export function ResultsTable({ data }) {
   return (
     <section className="panel results-panel">

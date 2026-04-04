@@ -1,3 +1,6 @@
+// Express application factory. Configures CORS, JSON body parsing, health
+// check endpoint, search API routes, and a global error handler.
+
 import cors from 'cors';
 import express from 'express';
 

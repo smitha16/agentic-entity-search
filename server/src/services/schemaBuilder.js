@@ -1,4 +1,7 @@
-// server/services/schemaBuilder.js — NEW VERSION
+// Schema builder service. Uses the LLM to infer the entity type and a set of
+// table columns for a given topic. Results are cached in memory so that
+// repeated queries skip the LLM call. Falls back to a generic schema if the
+// LLM response cannot be parsed.
 
 import OpenAI from 'openai';
 import { config } from '../config.js';
@@ -19,9 +22,11 @@ Given a user's topic query, determine:
 Return valid JSON only: {"entityType": "...", "columns": ["name", ...]}
 Do not include markdown fences.`;
 
-// Fast in-memory cache so identical topics don't re-call the LLM
+// In-memory cache keyed by topic string to avoid duplicate LLM calls.
 const schemaCache = new Map();
 
+// Asks the LLM to determine the entity type and column names for the topic.
+// Returns { entityType: string, columns: string[] }.
 export async function inferSchema(topic) {
   if (schemaCache.has(topic)) {
     return schemaCache.get(topic);

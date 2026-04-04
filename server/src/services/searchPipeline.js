@@ -1,4 +1,7 @@
-// server/services/searchPipeline.js — UPDATED
+// Orchestrates the full search pipeline. Infers the entity type and table
+// columns, generates search queries via the LLM, searches the web, scrapes
+// result pages, extracts structured entities, deduplicates them, and
+// optionally reflects to decide if a follow-up iteration is needed.
 
 import { buildQueryPlan } from './queryPlanner.js';
 import { extractEntities } from './entityExtractor.js';
@@ -10,6 +13,7 @@ import { reflectOnResults } from './reflector.js';
 
 const MAX_AGENT_ITERATIONS = 2;
 
+// Runs the search pipeline synchronously, returning the final result object.
 export async function runSearchPipeline({ topic, entityType, maxEntities = 10 }) {
   const startedAt = Date.now();
 
@@ -93,6 +97,8 @@ export async function runSearchPipeline({ topic, entityType, maxEntities = 10 })
   };
 }
 
+// Runs the search pipeline while emitting per-step progress events via the
+// provided callback, suitable for SSE streaming to the client.
 export async function runSearchPipelineWithEvents({ topic, entityType, maxEntities = 10 }, emitStep) {
   const startedAt = Date.now();
 

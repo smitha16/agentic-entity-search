@@ -1,4 +1,8 @@
-// server/routes/search.js
+// Search API routes. Provides two endpoints:
+//   POST /         - synchronous JSON response
+//   POST /stream   - SSE streaming with per-step progress events
+// Both validate the request payload, run the search pipeline, and return
+// structured entity results.
 
 import { Router } from 'express';
 import { z } from 'zod';
@@ -14,8 +18,7 @@ const requestSchema = z.object({
   entityType: z.string().trim().min(2).max(50).optional()
 });
 
-// ─── Existing route (keep it, still works) ───
-
+// Synchronous search endpoint. Returns the full result as a single JSON response.
 router.post('/', async (req, res, next) => {
   try {
     const payload = requestSchema.parse(req.body);
@@ -30,10 +33,10 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-// ─── NEW: SSE streaming route ───
-
+// SSE streaming endpoint. Sends per-step progress events and a final result
+// event over a Server-Sent Events connection.
 router.post('/stream', async (req, res, next) => {
-  // 1. Validate input (same as above)
+  // Validate input
   let payload;
   try {
     payload = requestSchema.parse(req.body);
@@ -46,35 +49,34 @@ router.post('/stream', async (req, res, next) => {
     return;
   }
 
-  // 2. Set up SSE headers — tells the browser "this is a stream"
+  // Set up SSE headers
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     Connection: 'keep-alive'
   });
 
-  // 3. Define what emit() does — it writes to the stream
-  //    THIS is the function that gets passed into the pipeline
+  // Writes a pipeline step event to the SSE stream.
   function emitStep(step, detail = {}) {
     if (res.writableEnded) return;
     const event = JSON.stringify({ type: 'step', step, ...detail });
     res.write(`data: ${event}\n\n`);
   }
 
-  // 3b. Keep the connection alive during long LLM waits
+  // Send periodic keepalive comments to prevent connection timeout.
   const keepalive = setInterval(() => {
     if (res.writableEnded) { clearInterval(keepalive); return; }
     res.write(': keepalive\n\n');
   }, 15000);
 
-  // 3c. Clean up if the client disconnects
+  // Clean up the keepalive interval if the client disconnects.
   req.on('close', () => clearInterval(keepalive));
 
-  // 4. Run the pipeline, passing emitStep as the callback
+  // Run the pipeline and stream results.
   try {
     const result = await runSearchPipelineWithEvents(payload, emitStep);
 
-    // 5. Send the final result as the last event
+    // Send the final result as the last SSE event.
     clearInterval(keepalive);
     if (!res.writableEnded) {
       res.write(`data: ${JSON.stringify({ type: 'result', data: result })}\n\n`);

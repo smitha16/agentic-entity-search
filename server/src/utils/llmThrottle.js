@@ -1,7 +1,7 @@
-// server/src/utils/llmThrottle.js
-// Shared throttle for all LLM calls to stay under free-tier rate limits
+// Shared throttle for all LLM calls. Enforces a minimum delay between
+// consecutive requests to stay within free-tier rate limits.
 
-const THROTTLE_MS = 4000; // ~15 RPM — safe for all free tiers
+const THROTTLE_MS = 4000;
 let lastLlmCallTime = 0;
 
 export async function throttleLlm() {

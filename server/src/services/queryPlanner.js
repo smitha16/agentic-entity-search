@@ -1,4 +1,6 @@
-// server/services/queryPlanner.js — NEW VERSION
+// Query planner service. Uses the LLM to generate a diverse set of search
+// queries for a given topic and entity type. Falls back to a simple template
+// approach if the LLM call fails.
 
 import OpenAI from 'openai';
 import { config } from '../config.js';
@@ -20,6 +22,7 @@ Strategy:
 Return valid JSON only: {"queries": ["query1", "query2", ...]}
 No markdown fences.`;
 
+// Generates 4-5 diverse search queries aimed at surfacing entities for the topic.
 export async function buildQueryPlan(topic, entityType) {
   try {
     const completion = await llmClient.chat.completions.create({

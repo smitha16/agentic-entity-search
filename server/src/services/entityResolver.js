@@ -1,3 +1,8 @@
+// Entity resolver service. Deduplicates extracted entities by matching on
+// normalized website hostname or company name, merging their cells and sources.
+
+// Strips common suffixes (Inc, LLC, etc.) and non-alphanumeric characters
+// so that minor name variations map to the same key.
 function normalizeName(value) {
   return value
     .toLowerCase()
@@ -6,6 +11,7 @@ function normalizeName(value) {
     .trim();
 }
 
+// Extracts the hostname from a URL, removing the www prefix, for dedup matching.
 function normalizeWebsite(value) {
   if (!value) {
     return '';
@@ -19,6 +25,7 @@ function normalizeWebsite(value) {
   }
 }
 
+// Combines two source arrays, dropping duplicates by URL + snippet.
 function mergeSources(existing = [], incoming = []) {
   const seen = new Set();
   const merged = [];
@@ -35,6 +42,7 @@ function mergeSources(existing = [], incoming = []) {
   return merged;
 }
 
+// Merges two cells, keeping the one with more sources and combining all sources.
 function mergeCells(left, right) {
   if (!left) {
     return right;
@@ -54,6 +62,8 @@ function mergeCells(left, right) {
   };
 }
 
+// Groups entities by normalized key (website or name), merges duplicate rows,
+// and returns the result sorted by confidence descending.
 export function resolveEntities(entities, columns) {
   const buckets = new Map();
 

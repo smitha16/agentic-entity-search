@@ -1,3 +1,8 @@
+// Entity extraction service. Sends page text chunks to the LLM and parses
+// structured entity rows from the JSON response. Each entity cell includes
+// source attribution (URL, title, snippet). Chunks are processed sequentially
+// and capped at a configurable maximum to stay within free-tier rate limits.
+
 import OpenAI from 'openai';
 import pLimit from 'p-limit';
 
@@ -10,6 +15,7 @@ import { chunkPage } from './chunker.js';
 const EXTRACTION_TIMEOUT_MS = 25000;
 const extractionLimit = pLimit(1);
 
+// Creates an OpenAI-compatible client configured for the selected LLM provider.
 function buildLlmClient() {
   if (!hasLlmConfig()) {
     return null;
@@ -39,6 +45,7 @@ function buildLlmClient() {
 
 const llmClient = buildLlmClient();
 
+// Parses a JSON string, stripping markdown code fences if present.
 function safeJsonParse(text) {
   const normalized = String(text || '').trim();
 
@@ -63,6 +70,8 @@ function safeJsonParse(text) {
   }
 }
 
+// Normalizes a raw cell value into the { value, sources } format.
+// Handles plain strings, objects, and null values from varying LLM outputs.
 function ensureCell(cell, fallbackSource) {
   if (cell == null) {
     return null;
@@ -96,6 +105,7 @@ function ensureCell(cell, fallbackSource) {
   };
 }
 
+// Maps a raw LLM entity object to a normalized row with validated cells.
 function normalizeEntity(rawEntity, columns, fallbackSource) {
   const cells = {};
 
@@ -113,10 +123,12 @@ function normalizeEntity(rawEntity, columns, fallbackSource) {
   };
 }
 
+// Builds the extraction prompt instructing the LLM to return structured entities.
 function buildPrompt({ topic, entityType, columns, page }) {
   return `You extract structured entities from web page text.\nReturn valid JSON with exactly this shape: {\"entities\": Array<object>}\n\nRules:\n- Only extract entities relevant to the topic.\n- Use only facts explicitly supported by the page text.\n- If a field is unknown, use null.\n- Every non-null field must be an object with { value, sources }.\n- Each sources array item must include url, title, snippet, chunk_id, confidence.\n- Keep snippets short and copied from the page text when possible.\n- Do not add markdown fences.\n\nTopic: ${topic}\nEntity type: ${entityType}\nColumns: ${columns.join(', ')}\nPage URL: ${page.url}\nPage Title: ${page.title}\nChunk Id: ${page.url}#page\n\nPage text:\n${page.content}`;
 }
 
+// Sends a single page chunk to the LLM and returns an array of normalized entities.
 async function extractFromPageWithOpenAi({ topic, entityType, columns, page }) {
   if (!llmClient) {
     throw new HttpError(500, 'Missing LLM_API_KEY or OPENAI_API_KEY in environment');
@@ -182,6 +194,8 @@ async function extractFromPageWithOpenAi({ topic, entityType, columns, page }) {
   return entities;
 }
 
+// Splits all pages into chunks, caps to MAX_CHUNKS, and extracts entities
+// sequentially from each chunk via the LLM.
 export async function extractEntities({ topic, entityType, columns, pages }) {
   // Flatten pages into chunks, cap at 6 to keep total time reasonable on free-tier LLMs
   const MAX_CHUNKS = 6;
