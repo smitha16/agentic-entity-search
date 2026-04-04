@@ -181,4 +181,62 @@ th {
   td {
     min-width: 220px;
   }
+
+}
+
+/* ─── Agent Progress ─── */
+
+.progress-panel {
+  margin-top: 20px;
+}
+
+.progress-title {
+  margin: 0 0 14px;
+  font-size: 1rem;
+}
+
+.step-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 0.92rem;
+  transition: background 0.2s ease;
+}
+
+.step-done {
+  color: rgba(19, 34, 56, 0.6);
+}
+
+.step-active {
+  background: rgba(19, 34, 56, 0.06);
+  font-weight: 600;
+}
+
+.step-icon {
+  flex-shrink: 0;
+  width: 24px;
+  text-align: center;
+}
+
+.step-message {
+  line-height: 1.4;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.step-active .step-icon {
+  animation: pulse 1.5s ease-in-out infinite;
 }

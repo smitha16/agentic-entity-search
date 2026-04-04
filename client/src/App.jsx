@@ -1,7 +1,10 @@
+// client/src/App.jsx
+
 import { useState } from 'react';
 
-import { searchEntities } from './lib/api.js';
+import { searchEntitiesStream } from './lib/api.js';
 import { ResultsTable } from './components/ResultsTable.jsx';
+import { AgentProgress } from './components/AgentProgress.jsx';
 
 const sampleTopics = [
   'AI startups in healthcare',
@@ -11,6 +14,7 @@ const sampleTopics = [
 
 export default function App() {
   const [topic, setTopic] = useState(sampleTopics[0]);
+  const [steps, setSteps] = useState([]);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -19,12 +23,26 @@ export default function App() {
     event.preventDefault();
     setLoading(true);
     setError('');
+    setData(null);
+    setSteps([]);    // Clear previous steps
 
     try {
-      const result = await searchEntities({ topic, maxEntities: 10 });
-      setData(result);
+      await searchEntitiesStream(
+        { topic, maxEntities: 10 },
+        {
+          onStep(stepEvent) {
+            // Each step event appends to the list
+            setSteps((prev) => [...prev, stepEvent]);
+          },
+          onResult(result) {
+            setData(result);
+          },
+          onError(err) {
+            setError(err.message);
+          }
+        }
+      );
     } catch (requestError) {
-      setData(null);
       setError(requestError.message);
     } finally {
       setLoading(false);
@@ -36,10 +54,6 @@ export default function App() {
       <section className="hero">
         <p className="eyebrow">Agentic Search Challenge</p>
         <h1>Discover entities from the web with traceable source evidence.</h1>
-        {/* <p className="hero-copy">
-          Enter a topic query and the app will search the web, process pages, extract entities, and return a
-          structured table where every value is tied back to its source.
-        </p> */}
       </section>
 
       <section className="panel">
@@ -58,13 +72,21 @@ export default function App() {
           </div>
           <div className="sample-row">
             {sampleTopics.map((sample) => (
-              <button key={sample} type="button" className="ghost-button" onClick={() => setTopic(sample)}>
+              <button
+                key={sample}
+                type="button"
+                className="ghost-button"
+                onClick={() => setTopic(sample)}
+              >
                 {sample}
               </button>
             ))}
           </div>
         </form>
       </section>
+
+      {/* Show live progress while searching */}
+      {loading && steps.length > 0 && <AgentProgress steps={steps} />}
 
       {error ? <section className="panel error-panel">{error}</section> : null}
       {data ? <ResultsTable data={data} /> : null}
