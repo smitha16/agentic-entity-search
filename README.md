@@ -2,6 +2,9 @@
 
 **Live demo:** [agentic-entity-search.onrender.com](https://agentic-entity-search.onrender.com/) (free tier, may take ~30s to wake up on first visit; searches take 1-2 minutes on free-tier LLMs)
 
+Sample output:
+<img src="Output.png" alt="EntityLens screenshot" width="800">
+
 An agentic entity search engine that accepts a natural language topic, searches the web, scrapes result pages, uses an LLM to extract structured entities, and returns a table where every cell includes source evidence with links back to the original page.
 
 Try querying things like **"electric vehicle companies in Europe"**, **"top 5 vegetarian restaurants in Amherst"**, or **"popular project management tools"**.
