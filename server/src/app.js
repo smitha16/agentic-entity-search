@@ -3,8 +3,14 @@
 
 import cors from 'cors';
 import express from 'express';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
 import { searchRouter } from './routes/search.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const clientDist = path.resolve(__dirname, '../../client/dist');
 
 // Creates and configures the Express application with middleware and routes.
 export function createApp() {
@@ -18,6 +24,14 @@ export function createApp() {
   });
 
   app.use('/api/search', searchRouter);
+
+  // In production, serve the built React client as static files
+  if (existsSync(clientDist)) {
+    app.use(express.static(clientDist));
+    app.get(/^(?!\/api).*/, (_req, res) => {
+      res.sendFile(path.join(clientDist, 'index.html'));
+    });
+  }
 
   app.use((error, _req, res, _next) => {
     const status = error.statusCode || 500;

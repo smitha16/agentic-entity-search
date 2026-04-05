@@ -1,7 +1,7 @@
 // API client. Calls the SSE streaming search endpoint and dispatches
 // per-step progress, result, and error events via callbacks.
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const API_URL = import.meta.env.VITE_API_URL || '';
 const REQUEST_TIMEOUT_MS = 600000; // 10 minutes for free-tier LLM pipelines
 
 // Opens an SSE stream to the search endpoint and dispatches events to the

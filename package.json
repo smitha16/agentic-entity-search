@@ -7,9 +7,9 @@
     "client"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev --workspace server\" \"npm run dev --workspace client\"",
+    "dev": "concurrently \"npm run dev --workspace server\" \"VITE_API_URL=http://localhost:4000 npm run dev --workspace client\"",
     "dev:server": "npm run dev --workspace server",
-    "dev:client": "npm run dev --workspace client",
+    "dev:client": "VITE_API_URL=http://localhost:4000 npm run dev --workspace client",
     "build": "npm run build --workspace client",
     "start": "npm run start --workspace server"
   },
