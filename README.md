@@ -1,5 +1,7 @@
 # EntityLens
 
+**Live demo:** [agentic-entity-search.onrender.com](https://agentic-entity-search.onrender.com/) (free tier, may take ~30s to wake up on first visit; searches take 1-2 minutes on free-tier LLMs)
+
 An agentic entity search engine that accepts a natural language topic, searches the web, scrapes result pages, uses an LLM to extract structured entities, and returns a table where every cell includes source evidence with links back to the original page.
 
 Try querying things like **"electric vehicle companies in Europe"**, **"top 5 vegetarian restaurants in Amherst"**, or **"popular project management tools"**.
@@ -248,6 +250,7 @@ SSE is simpler for this use case (server pushes progress to a single client). Th
 - **Entity deduplication is heuristic.** Dedup uses normalized names and website hostnames. Entities referred to by different names across pages (e.g. "VW" vs. "Volkswagen AG") may not be merged.
 - **Column inference is single-shot.** Columns are inferred once on the first iteration. If follow-up queries surface different types of information, the columns cannot adapt.
 - **Max 25 entities.** The `requestedCount` is capped at 25 to keep response sizes manageable.
+- **Slow on free-tier hosting.** On Render's free tier, the server cold-starts in ~30 seconds and searches take 1–2 minutes due to free-tier LLM rate limits and throttling.
 
 ## Tech stack
 
