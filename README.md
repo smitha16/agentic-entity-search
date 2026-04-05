@@ -250,7 +250,7 @@ SSE is simpler for this use case (server pushes progress to a single client). Th
 - **Entity deduplication is heuristic.** Dedup uses normalized names and website hostnames. Entities referred to by different names across pages (e.g. "VW" vs. "Volkswagen AG") may not be merged.
 - **Column inference is single-shot.** Columns are inferred once on the first iteration. If follow-up queries surface different types of information, the columns cannot adapt.
 - **Max 25 entities.** The `requestedCount` is capped at 25 to keep response sizes manageable.
-- **Slow on free-tier hosting.** On Render's free tier, the server cold-starts in ~30 seconds and searches take 1–2 minutes due to free-tier LLM rate limits and throttling.
+- **Slow on search render.** The searches take 1-2 minutes due to LLM rate limits and throttling.
 
 ## Tech stack
 
