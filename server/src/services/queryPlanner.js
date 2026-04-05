@@ -4,6 +4,8 @@
 
 import OpenAI from 'openai';
 import { config } from '../config.js';
+import { throttleLlm } from '../utils/llmThrottle.js';
+import { retryWithBackoff } from '../utils/retryWithBackoff.js';
 
 const llmClient = new OpenAI({
   apiKey: config.llmApiKey,
@@ -11,9 +13,10 @@ const llmClient = new OpenAI({
   timeout: 10000
 });
 
-const PLANNER_PROMPT = `You are a search query strategist. Given a user's research topic, generate 4-5 diverse search queries that would collectively surface the most relevant entities and data.
+const PLANNER_PROMPT = `You are a search query strategist. Given a user's research topic and the resolved entity type, generate 4-5 diverse search queries that would collectively surface the most relevant entities.
 
 Strategy:
+- Use the entity type to make queries specific (e.g., if entity type is "restaurant", search for "restaurants" not "places")
 - Include one broad overview query (e.g., listicle, comparison, "best X 2024")
 - Include one specific/niche query targeting deeper sources
 - Include one query aimed at recent/updated content
@@ -25,14 +28,18 @@ No markdown fences.`;
 // Generates 4-5 diverse search queries aimed at surfacing entities for the topic.
 export async function buildQueryPlan(topic, entityType) {
   try {
-    const completion = await llmClient.chat.completions.create({
-      model: config.llmModel,
-      messages: [
-        { role: 'system', content: PLANNER_PROMPT },
-        { role: 'user', content: `Topic: ${topic}\nEntity type: ${entityType}` }
-      ],
-      temperature: 0.3
-    });
+    await throttleLlm();
+    const completion = await retryWithBackoff(
+      () => llmClient.chat.completions.create({
+        model: config.llmModel,
+        messages: [
+          { role: 'system', content: PLANNER_PROMPT },
+          { role: 'user', content: `Topic: ${topic}\nEntity type: ${entityType}` }
+        ],
+        temperature: 0
+      }),
+      { label: 'queryPlanner' }
+    );
 
     const text = completion.choices[0]?.message?.content || '';
     const parsed = JSON.parse(text.replace(/```json?\s*|\s*```/g, ''));

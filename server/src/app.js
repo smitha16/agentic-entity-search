@@ -6,6 +6,7 @@ import express from 'express';
 
 import { searchRouter } from './routes/search.js';
 
+// Creates and configures the Express application with middleware and routes.
 export function createApp() {
   const app = express();
 

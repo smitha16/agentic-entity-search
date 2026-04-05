@@ -81,4 +81,5 @@ router.post('/stream', async (req, res, next) => {
   }
 });
 
+// Express router with the SSE streaming search endpoint.
 export const searchRouter = router;

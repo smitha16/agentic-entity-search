@@ -2,8 +2,8 @@
 // that each fits within the LLM context window. Tries to break at sentence or
 // paragraph boundaries to keep chunks coherent.
 
-const DEFAULT_CHUNK_SIZE = 3000;  // characters (~750 tokens)
-const DEFAULT_OVERLAP = 400;
+const DEFAULT_CHUNK_SIZE = 4000;  // characters (~1000 tokens)
+const DEFAULT_OVERLAP = 200;
 
 // Splits a text string into overlapping chunks of roughly chunkSize characters.
 export function chunkText(text, { chunkSize = DEFAULT_CHUNK_SIZE, overlap = DEFAULT_OVERLAP } = {}) {

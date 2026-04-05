@@ -5,6 +5,7 @@
 const DEFAULT_MAX_RETRIES = 4;
 const DEFAULT_BASE_DELAY_MS = 2000;
 
+// Wraps an async function with exponential backoff on 429 responses.
 export async function retryWithBackoff(fn, {
   maxRetries = DEFAULT_MAX_RETRIES,
   baseDelayMs = DEFAULT_BASE_DELAY_MS,

@@ -8,13 +8,14 @@ import { ResultsTable } from './components/ResultsTable.jsx';
 import { AgentProgress } from './components/AgentProgress.jsx';
 
 const sampleTopics = [
-  'AI startups in healthcare',
-  'top pizza places in Brooklyn',
-  'open source database tools'
+  'electric vehicle companies in Europe',
+  'popular project management tools',
+  'top rated coffee shops in San Francisco'
 ];
 
+// Renders the main search interface, handles form submission, and displays results.
 export default function App() {
-  const [topic, setTopic] = useState(sampleTopics[0]);
+  const [topic, setTopic] = useState('');
   const [steps, setSteps] = useState([]);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -23,6 +24,10 @@ export default function App() {
   // Submits the search topic and streams real-time pipeline events.
   async function handleSubmit(event) {
     event.preventDefault();
+    if (!topic.trim()) {
+      setError('Please enter a research topic to search for, e.g. "AI startups in healthcare" or "best pizza places in NYC".');
+      return;
+    }
     setLoading(true);
     setError('');
     setData(null);
@@ -54,8 +59,8 @@ export default function App() {
   return (
     <main className="page-shell">
       <section className="hero">
-        <p className="eyebrow">Agentic Search Challenge</p>
-        <h1>Discover entities from the web with traceable source evidence.</h1>
+        <h1>EntityLens</h1>
+        <p className="hero-tagline">Enter a search query below to discover entities, organized in a structured table with sources for every fact.</p>
       </section>
 
       <section className="panel">
@@ -66,7 +71,7 @@ export default function App() {
               id="topic"
               value={topic}
               onChange={(event) => setTopic(event.target.value)}
-              placeholder="e.g. AI startups in healthcare"
+              placeholder="e.g. Best pizzas in NYC"
             />
             <button disabled={loading} type="submit">
               {loading ? 'Searching...' : 'Run search'}

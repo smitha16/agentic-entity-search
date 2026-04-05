@@ -121,6 +121,7 @@ function resolveLlmModel(provider) {
 
 const llmProvider = resolveLlmProvider();
 
+// Exported configuration object with all resolved settings.
 export const config = {
   port: Number(process.env.PORT || 4000),
 
@@ -129,7 +130,7 @@ export const config = {
   braveApiKey: process.env.BRAVE_SEARCH_API_KEY || '',
   tavilyApiKey: process.env.TAVILY_API_KEY || process.env.SEARCH_API_KEY || '',
 
-  // LLM — all resolved from the detected provider
+  // LLM settings, all resolved from the detected provider
   llmProvider,
   llmApiKey: resolveLlmApiKey(llmProvider),
   llmModel: resolveLlmModel(llmProvider),

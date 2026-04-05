@@ -4,6 +4,8 @@
 
 import OpenAI from 'openai';
 import { config } from '../config.js';
+import { throttleLlm } from '../utils/llmThrottle.js';
+import { retryWithBackoff } from '../utils/retryWithBackoff.js';
 
 const llmClient = new OpenAI({
   apiKey: config.llmApiKey,
@@ -54,17 +56,21 @@ export async function reflectOnResults({ topic, entityType, columns, rows, maxEn
   });
 
   try {
-    const completion = await llmClient.chat.completions.create({
-      model: config.llmModel,
-      messages: [
-        { role: 'system', content: REFLECT_PROMPT },
-        {
-          role: 'user',
-          content: `Topic: ${topic}\nEntity type: ${entityType}\nColumns: ${columns.join(', ')}\nEntities found: ${rows.length}/${maxEntities}\n\nCurrent results:\n${JSON.stringify(summary, null, 2)}`
-        }
-      ],
-      temperature: 0.2
-    });
+    await throttleLlm();
+    const completion = await retryWithBackoff(
+      () => llmClient.chat.completions.create({
+        model: config.llmModel,
+        messages: [
+          { role: 'system', content: REFLECT_PROMPT },
+          {
+            role: 'user',
+            content: `Topic: ${topic}\nEntity type: ${entityType}\nColumns: ${columns.join(', ')}\nEntities found: ${rows.length}/${maxEntities}\n\nCurrent results:\n${JSON.stringify(summary, null, 2)}`
+          }
+        ],
+        temperature: 0
+      }),
+      { label: 'reflector' }
+    );
 
     const text = completion.choices[0]?.message?.content || '';
     return JSON.parse(text.replace(/```json?\s*|\s*```/g, ''));
