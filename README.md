@@ -17,6 +17,8 @@ Try querying things like **"electric vehicle companies in Europe"**, **"top 5 ve
 - **Per-cell source attribution.** Every value in the results table links back to the specific page and text snippet that supports it.
 - **Real-time SSE streaming.** The client shows live pipeline progress (searching, scraping, extracting, deduplicating) as each step completes.
 - **Input validation.** Non-research inputs like "hello" or empty queries are rejected at both client and server, with the server combining validation into the entity-type inference call to avoid an extra LLM round trip.
+- **Deterministic output.** All five LLM calls use temperature 0 for consistent entity extraction. The same page text always produces the same entities, eliminating LLM-side randomness. Run-to-run variation only comes from search result differences, which is expected.
+- **Conversational query support.** The entity type prompt accepts natural phrasing like "I'm in Bangalore, what are popular spots?" instead of requiring formal queries. It only rejects pure greetings and gibberish.
 
 ## Architecture
 
