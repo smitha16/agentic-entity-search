@@ -1,6 +1,6 @@
 # EntityLens
 
-**Live demo:** [agentic-entity-search.onrender.com](https://agentic-entity-search.onrender.com/) (free tier, may take ~30s to wake up on first visit; searches take 1-2 minutes on free-tier LLMs)
+**Live demo:** [agentic-entity-search.onrender.com](https://agentic-entity-search.onrender.com/) (free tier, may take ~30s to wake up on first visit; searches take 1-2 minutes on free-tier LLMs. Much faster and reliable on local.)
 
 Sample output:
 <img src="Output.png" alt="EntityLens screenshot" width="800">
