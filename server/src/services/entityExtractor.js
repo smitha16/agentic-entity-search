@@ -71,37 +71,18 @@ function safeJsonParse(text) {
 }
 
 // Normalizes a raw cell value into the { value, sources } format.
-// Handles plain strings, objects, and null values from varying LLM outputs.
+// The LLM returns simple values; source metadata is attached here from the page.
 function ensureCell(cell, fallbackSource) {
   if (cell == null) {
     return null;
   }
 
-  // Handle plain string/number values from LLMs that don't follow the nested format
-  if (typeof cell !== 'object') {
-    const value = String(cell).trim();
-    if (!value) return null;
-    return {
-      value,
-      sources: [fallbackSource]
-    };
-  }
-
-  if (!cell.value) {
-    return null;
-  }
-
-  const sources = Array.isArray(cell.sources) && cell.sources.length > 0 ? cell.sources : [fallbackSource];
+  const value = String(typeof cell === 'object' ? cell.value : cell).trim();
+  if (!value || value.toLowerCase() === 'null' || value.toLowerCase() === 'n/a' || value.toLowerCase() === 'unknown') return null;
 
   return {
-    value: String(cell.value).trim(),
-    sources: sources.map((source) => ({
-      url: source.url || fallbackSource.url,
-      title: source.title || fallbackSource.title,
-      snippet: String(source.snippet || fallbackSource.snippet || '').trim(),
-      chunk_id: source.chunk_id || fallbackSource.chunk_id,
-      confidence: typeof source.confidence === 'number' ? source.confidence : 0.8
-    }))
+    value,
+    sources: [fallbackSource]
   };
 }
 
@@ -124,8 +105,9 @@ function normalizeEntity(rawEntity, columns, fallbackSource) {
 }
 
 // Builds the extraction prompt instructing the LLM to return structured entities.
+// Output is kept minimal (plain values) to reduce token count and latency.
 function buildPrompt({ topic, entityType, columns, page }) {
-  return `You extract structured entities from web page text.\nReturn valid JSON with exactly this shape: {\"entities\": Array<object>}\n\nRules:\n- Only extract entities relevant to the topic.\n- Use only facts explicitly supported by the page text.\n- If a field is unknown, use null.\n- Every non-null field must be an object with { value, sources }.\n- Each sources array item must include url, title, snippet, chunk_id, confidence.\n- Keep snippets short and copied from the page text when possible.\n- Do not add markdown fences.\n\nTopic: ${topic}\nEntity type: ${entityType}\nColumns: ${columns.join(', ')}\nPage URL: ${page.url}\nPage Title: ${page.title}\nChunk Id: ${page.url}#page\n\nPage text:\n${page.content}`;
+  return `Extract entities from the page text below.\nReturn JSON: {"entities": [{"name": "...", ${columns.filter(c => c !== 'name').map(c => `"${c}": "..."`).join(', ')}, "confidence": 0.9}]}\n\nRules:\n- Only entities relevant to the topic.\n- Use facts from the text only. If unknown, use null.\n- Each field value is a plain string (not an object).\n- confidence: 0-1 based on relevance and support.\n- Order by relevance (most relevant first).\n- No markdown fences.\n\nTopic: ${topic}\nEntity type: ${entityType}\nColumns: ${columns.join(', ')}\n\nPage text:\n${page.content}`;
 }
 
 // Sends a single page chunk to the LLM and returns an array of normalized entities.
@@ -138,6 +120,7 @@ async function extractFromPageWithOpenAi({ topic, entityType, columns, page }) {
   const llmStart = Date.now();
   console.log(`[entityExtractor] Sending chunk to LLM: ${page.chunk_id || page.url} (${page.content.length} chars)`);
 
+  // Use shared throttle to coordinate with all other LLM calls
   await throttleLlm();
 
   try {
@@ -154,7 +137,8 @@ async function extractFromPageWithOpenAi({ topic, entityType, columns, page }) {
             content: buildPrompt({ topic, entityType, columns, page })
           }
         ],
-        temperature: 0.1
+        temperature: 0,
+        max_tokens: 2048
       }),
       { label: `extract:${page.url}` }
     );
@@ -197,8 +181,8 @@ async function extractFromPageWithOpenAi({ topic, entityType, columns, page }) {
 // Splits all pages into chunks, caps to MAX_CHUNKS, and extracts entities
 // sequentially from each chunk via the LLM.
 export async function extractEntities({ topic, entityType, columns, pages }) {
-  // Flatten pages into chunks, cap at 6 to keep total time reasonable on free-tier LLMs
-  const MAX_CHUNKS = 6;
+  // Flatten pages into chunks, cap at 3 to keep latency under 1 minute
+  const MAX_CHUNKS = 3;
   const allChunks = pages.flatMap((page) => chunkPage(page)).slice(0, MAX_CHUNKS);
   console.log(`[entityExtractor] Processing ${allChunks.length} chunks from ${pages.length} pages (capped at ${MAX_CHUNKS})`);
 

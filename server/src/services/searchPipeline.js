@@ -1,27 +1,47 @@
-// Orchestrates the full search pipeline. Infers the entity type and table
-// columns, generates search queries via the LLM, searches the web, scrapes
-// result pages, extracts structured entities, deduplicates them, and
-// optionally reflects to decide if a follow-up iteration is needed.
+// Orchestrates the full search pipeline. Infers the entity type first, then
+// generates search queries, searches the web, scrapes result pages, infers
+// table columns from the actual page content, extracts structured entities,
+// deduplicates them, and optionally reflects to decide if a follow-up
+// iteration is needed.
 
 import { buildQueryPlan } from './queryPlanner.js';
 import { extractEntities } from './entityExtractor.js';
 import { resolveEntities } from './entityResolver.js';
-import { inferSchema } from './schemaBuilder.js';
+import { inferEntityType, inferColumns } from './schemaBuilder.js';
 import { searchWeb } from './searchProvider.js';
 import { scrapeSearchResults } from './webScraper.js';
 import { reflectOnResults } from './reflector.js';
+import { HttpError } from '../utils/httpError.js';
 
 const MAX_AGENT_ITERATIONS = 2;
+const NULL_COLUMN_THRESHOLD = 0.5;
 
-// Runs the search pipeline synchronously, returning the final result object.
+// Removes columns where more than 50% of rows have null/missing values.
+function pruneEmptyColumns(columns, rows) {
+  return columns.filter((col) => {
+    if (col === 'name') return true;
+    const nullCount = rows.filter((row) => !row.cells[col]?.value).length;
+    return nullCount / Math.max(rows.length, 1) <= NULL_COLUMN_THRESHOLD;
+  });
+}
+
+// Runs the search pipeline as a single batch, returning the final result object.
 export async function runSearchPipeline({ topic, entityType, maxEntities = 10 }) {
   const startedAt = Date.now();
 
-  // Step 1: LLM-driven schema inference
-  const schema = await inferSchema(topic);
-  const resolvedEntityType = entityType || schema.entityType;
-  const columns = schema.columns;
+  // Step 1: Validate topic and determine entity type in one LLM call
+  const inference = entityType
+    ? { valid: true, entityType }
+    : await inferEntityType(topic);
 
+  if (!inference.valid) {
+    throw new HttpError(400, 'Please enter a research topic to search for, e.g. "AI startups in healthcare" or "best pizza places in NYC".');
+  }
+
+  const resolvedEntityType = inference.entityType;
+  const resolvedMaxEntities = inference.requestedCount || maxEntities;
+
+  let columns = null;
   let allExtracted = [];
   let allSearchResults = [];
   let allPages = [];
@@ -40,11 +60,16 @@ export async function runSearchPipeline({ topic, entityType, maxEntities = 10 })
     // Step 4: Scrape
     const newUrls = searchResults
       .filter((r) => !allPages.some((p) => p.url === r.url))
-      .slice(0, 8);
+      .slice(0, 5);
     const pages = await scrapeSearchResults(newUrls);
     allPages.push(...pages);
 
-    // Step 5: Extract from chunks
+    // Step 5: Infer columns from actual page content (only on first iteration)
+    if (!columns) {
+      columns = await inferColumns(topic, resolvedEntityType, allPages);
+    }
+
+    // Step 6: Extract from chunks
     const extracted = await extractEntities({
       topic,
       entityType: resolvedEntityType,
@@ -53,17 +78,26 @@ export async function runSearchPipeline({ topic, entityType, maxEntities = 10 })
     });
     allExtracted.push(...extracted);
 
-    // Step 6: Merge and dedupe
-    const rows = resolveEntities(allExtracted, columns).slice(0, maxEntities);
+    // Step 7: Merge and dedupe
+    const rows = resolveEntities(allExtracted, columns).slice(0, resolvedMaxEntities);
 
-    // Step 7: Reflect — should we iterate?
+    // Step 8: Reflect, only if results are very sparse
     if (iteration < MAX_AGENT_ITERATIONS - 1) {
+      const filledRatio = rows.reduce((sum, row) => {
+        const filled = columns.filter((col) => row.cells[col]?.value).length;
+        return sum + filled / columns.length;
+      }, 0) / Math.max(rows.length, 1);
+
+      if (rows.length >= 3 && filledRatio > 0.3) {
+        break;
+      }
+
       const reflection = await reflectOnResults({
         topic,
         entityType: resolvedEntityType,
         columns,
         rows,
-        maxEntities
+        maxEntities: resolvedMaxEntities
       });
 
       if (reflection.satisfied) {
@@ -79,12 +113,15 @@ export async function runSearchPipeline({ topic, entityType, maxEntities = 10 })
     }
   }
 
-  const rows = resolveEntities(allExtracted, columns).slice(0, maxEntities);
+  const rows = resolveEntities(allExtracted, columns).slice(0, resolvedMaxEntities);
+
+  // Prune columns that are mostly empty (>50% null)
+  const prunedColumns = pruneEmptyColumns(columns, rows);
 
   return {
     topic,
     entityType: resolvedEntityType,
-    columns,
+    columns: prunedColumns,
     rows,
     meta: {
       queryVariants: [...new Set(allSearchResults.map((r) => r.query))],
@@ -102,13 +139,22 @@ export async function runSearchPipeline({ topic, entityType, maxEntities = 10 })
 export async function runSearchPipelineWithEvents({ topic, entityType, maxEntities = 10 }, emitStep) {
   const startedAt = Date.now();
 
-  // Step 1: LLM-driven schema inference
-  emitStep('schema_inference', { message: 'Inferring schema...' });
-  const schema = await inferSchema(topic);
-  const resolvedEntityType = entityType || schema.entityType;
-  const columns = schema.columns;
-  emitStep('schema_complete', { schema });
+  // Step 1: Validate topic and determine entity type in one LLM call
+  emitStep('schema_inference', { message: 'Validating topic and inferring entity type...' });
+  const inference = entityType
+    ? { valid: true, entityType }
+    : await inferEntityType(topic);
 
+  if (!inference.valid) {
+    throw new HttpError(400, 'Please enter a research topic to search for, e.g. "AI startups in healthcare" or "best pizza places in NYC".');
+  }
+
+  const resolvedEntityType = inference.entityType;
+  emitStep('entity_type_ready', { entityType: resolvedEntityType });
+
+  const resolvedMaxEntities = inference.requestedCount || maxEntities;
+
+  let columns = null;
   let allExtracted = [];
   let allSearchResults = [];
   let allPages = [];
@@ -134,12 +180,19 @@ export async function runSearchPipelineWithEvents({ topic, entityType, maxEntiti
     emitStep('scraping', { urlCount: searchResults.length, message: 'Scraping web pages...' });
     const newUrls = searchResults
       .filter((r) => !allPages.some((p) => p.url === r.url))
-      .slice(0, 8);
+      .slice(0, 5);
     const pages = await scrapeSearchResults(newUrls);
     allPages.push(...pages);
     emitStep('scrape_complete', { pagesScraped: pages.length });
 
-    // Step 5: Extract from chunks
+    // Step 5: Infer columns from actual page content (only on first iteration)
+    if (!columns) {
+      emitStep('inferring_columns', { message: 'Choosing table columns from page content...' });
+      columns = await inferColumns(topic, resolvedEntityType, allPages);
+      emitStep('columns_ready', { columns });
+    }
+
+    // Step 6: Extract from chunks
     emitStep('extracting_entities', { pageCount: pages.length, message: 'Extracting entities...' });
     const extracted = await extractEntities({
       topic,
@@ -150,20 +203,30 @@ export async function runSearchPipelineWithEvents({ topic, entityType, maxEntiti
     allExtracted.push(...extracted);
     emitStep('extraction_complete', { entitiesExtracted: extracted.length });
 
-    // Step 6: Merge and dedupe
+    // Step 7: Merge and dedupe
     emitStep('deduplicating', { candidateCount: allExtracted.length, message: 'Deduplicating entities...' });
-    const rows = resolveEntities(allExtracted, columns).slice(0, maxEntities);
+    const rows = resolveEntities(allExtracted, columns).slice(0, resolvedMaxEntities);
     emitStep('dedup_complete', { uniqueEntities: rows.length });
 
-    // Step 7: Reflect — should we iterate?
+    // Step 8: Reflect, only if results are very sparse
     if (iteration < MAX_AGENT_ITERATIONS - 1) {
+      const filledRatio = rows.reduce((sum, row) => {
+        const filled = columns.filter((col) => row.cells[col]?.value).length;
+        return sum + filled / columns.length;
+      }, 0) / Math.max(rows.length, 1);
+
+      if (rows.length >= 3 && filledRatio > 0.3) {
+        emitStep('satisfied', { message: 'Results look good, skipping reflection.' });
+        break;
+      }
+
       emitStep('reflecting', { message: 'Analyzing results for follow-up...' });
       const reflection = await reflectOnResults({
         topic,
         entityType: resolvedEntityType,
         columns,
         rows,
-        maxEntities
+        maxEntities: resolvedMaxEntities
       });
       emitStep('reflection_complete', { satisfied: reflection.satisfied });
 
@@ -182,12 +245,15 @@ export async function runSearchPipelineWithEvents({ topic, entityType, maxEntiti
     }
   }
 
-  const rows = resolveEntities(allExtracted, columns).slice(0, maxEntities);
+  const rows = resolveEntities(allExtracted, columns).slice(0, resolvedMaxEntities);
+
+  // Prune columns that are mostly empty (>50% null)
+  const prunedColumns = pruneEmptyColumns(columns, rows);
 
   const result = {
     topic,
     entityType: resolvedEntityType,
-    columns,
+    columns: prunedColumns,
     rows,
     meta: {
       queryVariants: [...new Set(allSearchResults.map((r) => r.query))],

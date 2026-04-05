@@ -1,3 +1,6 @@
+// Results table component. Renders extracted entities in a table with
+// per-cell source attribution and expandable source details.
+
 // Renders a single table cell value with an expandable sources list.
 function Cell({ cell }) {
   if (!cell) {

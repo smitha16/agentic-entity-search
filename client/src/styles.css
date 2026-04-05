@@ -1,3 +1,5 @@
+/* Global styles for the EntityLens client application. */
+
 :root {
   color: #132238;
   background:
@@ -34,18 +36,17 @@ button {
   padding: 16px 0 24px;
 }
 
-.eyebrow {
-  margin: 0 0 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 0.78rem;
+h1 {
+  margin: 0 0 8px;
+  font-size: clamp(2.2rem, 5vw, 4.4rem);
+  line-height: 1;
 }
 
-h1 {
+.hero-tagline {
   margin: 0;
-  font-size: clamp(2.2rem, 5vw, 4.4rem);
-  line-height: 0.96;
-  max-width: 12ch;
+  font-size: 1.1rem;
+  color: rgba(19, 34, 56, 0.6);
+  line-height: 1.4;
 }
 
 .hero-copy {
