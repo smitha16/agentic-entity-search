@@ -110,7 +110,7 @@ agentic-entity-search/
 
 - Node.js 18+ (tested with Node 25)
 - A Tavily API key (free tier)
-- One LLM API key (Groq, Gemini, OpenAI, or OpenRouter)
+- One LLM API key (Groq)
 
 ### 1. Clone and install
 
@@ -151,17 +151,6 @@ SEARCH_PROVIDER=tavily
 TAVILY_API_KEY=your_tavily_key
 ```
 
-### Search API: Brave (alternative)
-
-1. Go to [brave.com/search/api](https://brave.com/search/api/) and sign up.
-2. Generate an API key from the dashboard.
-3. Set in `.env`:
-
-```bash
-SEARCH_PROVIDER=brave
-BRAVE_SEARCH_API_KEY=your_brave_key
-```
-
 ### LLM: Groq (recommended, fast free tier)
 
 1. Go to [console.groq.com](https://console.groq.com) and create an account.
@@ -173,29 +162,6 @@ GROQ_API_KEY=your_groq_key
 ```
 
 The app auto-detects Groq and uses `llama-3.3-70b-versatile` by default.
-
-### LLM: Google Gemini (alternative free tier)
-
-1. Go to [aistudio.google.com](https://aistudio.google.com/) and sign in.
-2. Click "Get API key" and create a key.
-3. Set in `.env`:
-
-```bash
-GEMINI_API_KEY=your_gemini_key
-```
-
-The app auto-detects Gemini and uses `gemini-2.0-flash` by default.
-
-### LLM: OpenAI (paid)
-
-1. Go to [platform.openai.com](https://platform.openai.com) and add billing.
-2. Create an API key under API Keys.
-3. Set in `.env`:
-
-```bash
-OPENAI_API_KEY=your_openai_key
-OPENAI_MODEL=gpt-4.1-mini   # optional, this is the default
-```
 
 ### LLM: OpenRouter (many models, some free)
 
