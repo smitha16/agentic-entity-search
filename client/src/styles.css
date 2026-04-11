@@ -241,3 +241,73 @@ th {
 .step-active .step-icon {
   animation: pulse 1.5s ease-in-out infinite;
 }
+
+/* ─── Requirements ─── */
+
+.requirements-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  background: rgba(19, 34, 56, 0.04);
+  border-radius: 12px;
+  font-size: 0.9rem;
+}
+
+.requirement-tag {
+  display: inline-block;
+  padding: 4px 10px;
+  background: rgba(19, 34, 56, 0.08);
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+/* Match tier badges */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.badge-full {
+  background: rgba(34, 139, 34, 0.12);
+  color: #1a6b1a;
+}
+
+.badge-partial {
+  background: rgba(204, 153, 0, 0.12);
+  color: #8a6800;
+}
+
+.badge-none {
+  background: rgba(19, 34, 56, 0.06);
+  color: rgba(19, 34, 56, 0.5);
+}
+
+/* Row tinting by tier */
+.row-full td {
+  background: rgba(34, 139, 34, 0.03);
+}
+
+.row-partial td {
+  background: rgba(204, 153, 0, 0.03);
+}
+
+.row-none td {
+  opacity: 0.65;
+}
+
+/* Tier divider rows */
+.tier-divider td {
+  text-align: center;
+  font-size: 0.8rem;
+  color: rgba(19, 34, 56, 0.4);
+  padding: 8px;
+  border-top: 2px solid rgba(19, 34, 56, 0.08);
+  font-style: italic;
+}
