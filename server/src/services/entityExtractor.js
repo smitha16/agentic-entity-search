@@ -107,7 +107,34 @@ function normalizeEntity(rawEntity, columns, fallbackSource) {
 // Builds the extraction prompt instructing the LLM to return structured entities.
 // Output is kept minimal (plain values) to reduce token count and latency.
 function buildPrompt({ topic, entityType, columns, page }) {
-  return `Extract entities from the page text below.\nReturn JSON: {"entities": [{"name": "...", ${columns.filter(c => c !== 'name').map(c => `"${c}": "..."`).join(', ')}, "confidence": 0.9}]}\n\nRules:\n- Only entities relevant to the topic.\n- Use facts from the text only. If unknown, use null.\n- Each field value is a plain string (not an object).\n- confidence: 0-1 based on relevance and support.\n- Order by relevance (most relevant first).\n- No markdown fences.\n\nTopic: ${topic}\nEntity type: ${entityType}\nColumns: ${columns.join(', ')}\n\nPage text:\n${page.content}`;
+  return `Extract entities from the page text below.
+Return JSON: {"entities": [{"name": "...", ${columns.filter(c => c !== 'name').map(c => `"${c}": "..."`).join(', ')}, "confidence": 0.9}]}
+ 
+Rules:
+- Only entities relevant to the topic. Each entity must be a specific ${entityType}, not a category, location, or concept.
+- Use facts from the text only. If unknown, use null.
+- Each field value is a plain string (not an object).
+- confidence: 0-1 based on relevance and support.
+- Order by relevance (most relevant first).
+- No markdown fences.
+ 
+Number formatting rules:
+- For monetary values, use readable formats: "$1.1B", "$946M", "$27M", "$500K".
+- Do NOT output raw large numbers like "248853203103". Always use B/M/K suffixes.
+- Each value must belong to ONE specific entity. Do NOT sum or aggregate numbers across entities.
+- If a number seems unrealistically large for a single ${entityType} (e.g. hundreds of billions for a startup), it is likely an aggregate — skip it and use null.
+ 
+Entity rules:
+- Each entity must be a specific, named ${entityType} — not a city, region, category, or list name.
+- "San Francisco Bay Area" is NOT a ${entityType}. "New York City" is NOT a ${entityType}.
+- A page title like "Top 50 Startups" is NOT an entity — extract the startups listed inside.
+ 
+Topic: ${topic}
+Entity type: ${entityType}
+Columns: ${columns.join(', ')}
+ 
+Page text:
+${page.content}`;
 }
 
 // Sends a single page chunk to the LLM and returns an array of normalized entities.
@@ -182,8 +209,26 @@ async function extractFromPageWithOpenAi({ topic, entityType, columns, page }) {
 // sequentially from each chunk via the LLM.
 export async function extractEntities({ topic, entityType, columns, pages }) {
   // Flatten pages into chunks, cap at 3 to keep latency under 1 minute
-  const MAX_CHUNKS = 3;
-  const allChunks = pages.flatMap((page) => chunkPage(page)).slice(0, MAX_CHUNKS);
+  // const MAX_CHUNKS = 3;
+  // const allChunks = pages.flatMap((page) => chunkPage(page)).slice(0, MAX_CHUNKS);
+  const MAX_CHUNKS = 4;
+  const chunkedPages = pages.map((page) => chunkPage(page));
+
+  const allChunks = [];
+  let chunkIndex = 0;
+
+  while (allChunks.length < MAX_CHUNKS) {
+    let addedAny = false;
+    for (const pageChunks of chunkedPages) {
+      if (allChunks.length >= MAX_CHUNKS) break;
+      if (chunkIndex < pageChunks.length) {
+        allChunks.push(pageChunks[chunkIndex]);
+        addedAny = true;
+      }
+    }
+    if (!addedAny) break;
+    chunkIndex++;
+  }
   console.log(`[entityExtractor] Processing ${allChunks.length} chunks from ${pages.length} pages (capped at ${MAX_CHUNKS})`);
 
   let completed = 0;
