@@ -8,9 +8,8 @@ import { ResultsTable } from './components/ResultsTable.jsx';
 import { AgentProgress } from './components/AgentProgress.jsx';
 
 const sampleTopics = [
-  'electric vehicle companies in Europe',
-  'popular project management tools',
-  'top rated coffee shops in San Francisco'
+  'Startups in the US that have more than 10 million funding',
+  'Tennis players who are male and have won grand slams',
 ];
 
 // Renders the main search interface, handles form submission, and displays results.
