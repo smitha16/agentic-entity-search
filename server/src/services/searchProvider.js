@@ -105,7 +105,10 @@ export async function searchWeb(queries, limitPerQuery = 5) {
 
   for (let qi = 0; qi < queries.length; qi++) {
     const settled = allResults[qi];
-    if (settled.status !== 'fulfilled') continue;
+    if (settled.status !== 'fulfilled') {
+      console.warn(`[searchProvider] Query "${queries[qi]}" failed:`, settled.reason?.message || settled.reason);
+      continue;
+    }
 
     for (const [index, item] of settled.value.entries()) {
       const normalized = normalizeUrl(item.url);

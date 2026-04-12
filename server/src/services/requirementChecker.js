@@ -138,11 +138,15 @@ For each entity and requirement, determine:
 - "reason": brief explanation
 
 Be STRICT and ACCURATE. Look at the actual numbers and values:
-- If Wimbledon Titles = 0, the player did NOT win Wimbledon.
-- If Grand Slams Won = 7 and Wimbledon Titles = 0, they won other slams but NOT Wimbledon.
-- "Won only Wimbledon" means Wimbledon Titles >= 1 AND no other grand slams.
+- If you have data that goes years back, it is still valid. Treat it as a known fact.
 - Always cross-reference multiple columns when the requirement involves "only", "none", "all", etc.
 - Use real-world knowledge for geography: "Boston" is in the US, "Amherst" is in Massachusetts, etc.
+- When checking location/nationality requirements, treat these as equivalent:
+  country adjectives and country names (e.g. "Swiss" = "Switzerland", 
+  "French" = "France", "Spanish" = "Spain" etc.)
+- When checking if someone has done/won/achieved something, look at ALL columns in the entity data for relevant evidence. If any column contains a numeric value >= 1 or descriptive text related to the requirement, that counts as evidence.
+- Do NOT overthink simple checks. If the data clearly supports the requirement, mark it satisfied.
+- Match requirements semantically, not just by exact field names. "Won grand slams" should match a column called "Grand Slam Titles" or "Major Wins". "Scored goals" should match "Goals" or "Career Goals".
 
 Use your knowledge. For example:
 - "Boston" IS in the US (it's in Massachusetts)
@@ -161,35 +165,58 @@ Format:
 async function checkTextRequirementsWithLlm(entitiesToCheck) {
   if (entitiesToCheck.length === 0) return [];
 
-  try {
-    await throttleLlm();
-    const completion = await retryWithBackoff(
-      () => llmClient.chat.completions.create({
-        model: config.llmModel,
-        messages: [
-          { role: 'system', content: TEXT_CHECK_PROMPT },
-          {
-            role: 'user',
-            content: `Check these:\n${JSON.stringify(entitiesToCheck, null, 2)}`
+  const BATCH_SIZE = 12;
+  const allResults = [];
+
+  for (let i = 0; i < entitiesToCheck.length; i += BATCH_SIZE) {
+    const batch = entitiesToCheck.slice(i, i + BATCH_SIZE);
+
+    // Renumber to 0-based within this batch
+    const renumbered = batch.map((check, localIdx) => ({
+      ...check,
+      entity_index: localIdx,
+      requirement_index: check.requirement_index
+    }));
+
+    try {
+      await throttleLlm();
+      const completion = await retryWithBackoff(
+        () => llmClient.chat.completions.create({
+          model: config.llmModel,
+          messages: [
+            { role: 'system', content: TEXT_CHECK_PROMPT },
+            {
+              role: 'user',
+              content: `Check these:\n${JSON.stringify(renumbered, null, 2)}`
+            }
+          ],
+          temperature: 0,
+          top_p: 0.01
+        }),
+        { label: `textRequirementCheck-batch-${i}` }
+      );
+
+      const text = completion.choices[0]?.message?.content || '';
+      console.log(`[requirementChecker] LLM text check batch ${Math.floor(i / BATCH_SIZE) + 1} response: ${text.slice(0, 300)}`);
+
+      const parsed = robustJsonParse(text);
+      if (parsed && Array.isArray(parsed.results)) {
+        // Map local indices back to original
+        for (const result of parsed.results) {
+          const localIdx = result.entity_index;
+          if (localIdx != null && localIdx < batch.length) {
+            result.entity_index = batch[localIdx].entity_index;
+            result.requirement_index = batch[localIdx].requirement_index;
           }
-        ],
-        temperature: 0
-      }),
-      { label: 'textRequirementCheck' }
-    );
-
-    const text = completion.choices[0]?.message?.content || '';
-    console.log(`[requirementChecker] LLM text check response: ${text.slice(0, 500)}`);
-
-    const parsed = robustJsonParse(text);
-    if (parsed && Array.isArray(parsed.results)) {
-      return parsed.results;
+        }
+        allResults.push(...parsed.results);
+      }
+    } catch (error) {
+      console.warn(`[requirementChecker] LLM text check batch failed: ${error.message}`);
     }
-  } catch (error) {
-    console.warn(`[requirementChecker] LLM text check failed: ${error.message}`);
   }
 
-  return [];
+  return allResults;
 }
 
 // ─── Step 1: Extract requirements from the query ───
@@ -230,7 +257,8 @@ export async function extractRequirements(topic) {
           { role: 'system', content: EXTRACT_REQUIREMENTS_PROMPT },
           { role: 'user', content: `Extract requirements from: "${topic}"` }
         ],
-        temperature: 0
+        temperature: 0,
+        top_p: 0.01
       }),
       { label: 'extractRequirements' }
     );
@@ -281,17 +309,17 @@ export async function checkRequirements(rows, columns, requirements) {
       const req = requirements[reqIdx];
       const cellValue = findCellValue(req.field, entityData, columns);
 
-      if (!cellValue) {
-        resultGrid[rowIdx][reqIdx] = {
-          satisfied: false,
-          closeness: 0.3,
-          reason: `No data available for ${req.field}`
-        };
-        continue;
-      }
-
-      // Numeric: do programmatically
+      // Numeric: try programmatic check (needs a specific cell value)
       if (req.operator === 'greater_than' || req.operator === 'less_than') {
+        if (!cellValue) {
+          resultGrid[rowIdx][reqIdx] = {
+            satisfied: false,
+            closeness: 0.3,
+            reason: `No data available for ${req.field}`
+          };
+          continue;
+        }
+
         const result = checkNumericRequirement(req.operator, cellValue, req.value);
         if (result) {
           resultGrid[rowIdx][reqIdx] = result;
@@ -300,14 +328,13 @@ export async function checkRequirements(rows, columns, requirements) {
         // If parsing failed, fall through to LLM
       }
 
-      // Text-based: collect for LLM batch
+      // Text-based: ALWAYS send to LLM with full entity data
       textChecks.push({
         entity_index: rowIdx,
         requirement_index: reqIdx,
         entity_name: entityData.name || `Entity ${rowIdx}`,
-        cell_value: cellValue,
-        requirement: req.description,
         entity_data: entityData,
+        requirement: req.description,
         check: `Given this entity's data: ${JSON.stringify(entityData)}, does it satisfy: "${req.description}"?`
       });
     }
