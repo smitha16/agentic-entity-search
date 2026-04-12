@@ -36,7 +36,8 @@ export async function buildQueryPlan(topic, entityType) {
           { role: 'system', content: PLANNER_PROMPT },
           { role: 'user', content: `Topic: ${topic}\nEntity type: ${entityType}` }
         ],
-        temperature: 0
+        temperature: 0,
+        top_p: 0.01
       }),
       { label: 'queryPlanner' }
     );
