@@ -67,7 +67,8 @@ export async function inferEntityType(topic) {
           { role: 'system', content: ENTITY_TYPE_PROMPT },
           { role: 'user', content: topic }
         ],
-        temperature: 0
+        temperature: 0,
+        top_p: 0.01
       }),
       { label: 'entityTypeInference' }
     );
@@ -122,7 +123,8 @@ export async function inferColumns(topic, entityType, pages) {
             content: `Topic: ${topic}\nEntity type: ${entityType}\n\nPage snippets:\n${snippets}`
           }
         ],
-        temperature: 0
+        temperature: 0,
+        top_p: 0.01
       }),
       { label: 'columnInference' }
     );

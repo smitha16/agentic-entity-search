@@ -70,25 +70,39 @@ export function resolveEntities(entities, columns) {
   for (const entity of entities) {
     const name = entity.cells.name?.value || '';
     const website = entity.cells.website?.value || '';
-    const key = normalizeWebsite(website) || normalizeName(name);
+    const websiteKey = normalizeWebsite(website);
+    const nameKey = normalizeName(name);
+
+    // Check both keys so entities are merged even if one extraction
+    // has a website and another doesn't
+    const existingKey = (websiteKey && buckets.has(websiteKey)) ? websiteKey
+      : (nameKey && buckets.has(nameKey)) ? nameKey
+      : null;
+
+    const key = existingKey || websiteKey || nameKey;
 
     if (!key) {
       continue;
     }
 
-    if (!buckets.has(key)) {
-      const initialCells = {};
-      for (const column of columns) {
-        initialCells[column] = entity.cells[column] || null;
-      }
+if (!existingKey) {
+  const initialCells = {};
+  for (const column of columns) {
+    initialCells[column] = entity.cells[column] || null;
+  }
 
-      buckets.set(key, {
-        entity_id: key.replace(/[^a-z0-9]+/g, '-'),
-        confidence: entity.confidence || 0.8,
-        cells: initialCells
-      });
-      continue;
-    }
+  const bucket = {
+    entity_id: (websiteKey || nameKey).replace(/[^a-z0-9]+/g, '-'),
+    confidence: entity.confidence || 0.8,
+    cells: initialCells
+  };
+
+  // Store under both keys so future extractions find it
+  // regardless of whether they have a website or just a name
+  if (websiteKey) buckets.set(websiteKey, bucket);
+  if (nameKey) buckets.set(nameKey, bucket);
+  continue;
+}
 
     const current = buckets.get(key);
     current.confidence = Math.max(current.confidence, entity.confidence || 0.8);
@@ -98,5 +112,5 @@ export function resolveEntities(entities, columns) {
     }
   }
 
-  return Array.from(buckets.values()).sort((a, b) => b.confidence - a.confidence);
+  return Array.from(new Set(buckets.values())).sort((a, b) => b.confidence - a.confidence);
 }

@@ -180,7 +180,7 @@ export async function runSearchPipelineWithEvents({ topic, entityType, maxEntiti
 
   // Create a broader version of the topic for diverse search results
   const broadTopic = broadenTopic(topic, requirements);
-  if (broadTopic) {
+  if (broadTopic && broadTopic !== topic) {
     console.log(`[searchPipeline] Broad topic: "${broadTopic}"`);
   }
 
@@ -269,41 +269,41 @@ export async function runSearchPipelineWithEvents({ topic, entityType, maxEntiti
     const rows = resolveEntities(allExtracted, columns).slice(0, resolvedMaxEntities);
     emitStep('dedup_complete', { uniqueEntities: rows.length });
 
-    // Step 8: Reflect, only if results are very sparse
-    if (iteration < MAX_AGENT_ITERATIONS - 1) {
-      const filledRatio = rows.reduce((sum, row) => {
-        const filled = columns.filter((col) => row.cells[col]?.value).length;
-        return sum + filled / columns.length;
-      }, 0) / Math.max(rows.length, 1);
+    // // Step 8: Reflect, only if results are very sparse
+    // if (iteration < MAX_AGENT_ITERATIONS - 1) {
+    //   const filledRatio = rows.reduce((sum, row) => {
+    //     const filled = columns.filter((col) => row.cells[col]?.value).length;
+    //     return sum + filled / columns.length;
+    //   }, 0) / Math.max(rows.length, 1);
 
-      if (rows.length >= 3 && filledRatio > 0.3) {
-        emitStep('satisfied', { message: 'Results look good, skipping reflection.' });
-        break;
-      }
+    //   if (rows.length >= 3 && filledRatio > 0.3) {
+    //     emitStep('satisfied', { message: 'Results look good, skipping reflection.' });
+    //     break;
+    //   }
 
-      emitStep('reflecting', { message: 'Analyzing results for follow-up...' });
-      const reflection = await reflectOnResults({
-        topic,
-        entityType: resolvedEntityType,
-        columns,
-        rows,
-        maxEntities: resolvedMaxEntities
-      });
-      emitStep('reflection_complete', { satisfied: reflection.satisfied });
+    //   emitStep('reflecting', { message: 'Analyzing results for follow-up...' });
+    //   const reflection = await reflectOnResults({
+    //     topic,
+    //     entityType: resolvedEntityType,
+    //     columns,
+    //     rows,
+    //     maxEntities: resolvedMaxEntities
+    //   });
+    //   emitStep('reflection_complete', { satisfied: reflection.satisfied });
 
-      if (reflection.satisfied) {
-        emitStep('satisfied', { message: 'Results are satisfactory, stopping.' });
-        break;
-      }
+    //   if (reflection.satisfied) {
+    //     emitStep('satisfied', { message: 'Results are satisfactory, stopping.' });
+    //     break;
+    //   }
 
-      if (Array.isArray(reflection.followUpQueries) && reflection.followUpQueries.length > 0) {
-        iterationQueries = reflection.followUpQueries.slice(0, 3);
-        emitStep('followup_queries', { queries: iterationQueries });
-        continue;
-      }
+    //   if (Array.isArray(reflection.followUpQueries) && reflection.followUpQueries.length > 0) {
+    //     iterationQueries = reflection.followUpQueries.slice(0, 3);
+    //     emitStep('followup_queries', { queries: iterationQueries });
+    //     continue;
+    //   }
 
-      break;
-    }
+    //   break;
+    // }
   }
 
   // Use a higher internal limit to ensure diversity, trim to requested count at the end

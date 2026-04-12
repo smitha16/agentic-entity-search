@@ -67,7 +67,8 @@ export async function reflectOnResults({ topic, entityType, columns, rows, maxEn
             content: `Topic: ${topic}\nEntity type: ${entityType}\nColumns: ${columns.join(', ')}\nEntities found: ${rows.length}/${maxEntities}\n\nCurrent results:\n${JSON.stringify(summary, null, 2)}`
           }
         ],
-        temperature: 0
+        temperature: 0,
+        top_p: 0.01
       }),
       { label: 'reflector' }
     );

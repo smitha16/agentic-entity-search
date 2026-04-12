@@ -165,6 +165,7 @@ async function extractFromPageWithOpenAi({ topic, entityType, columns, page }) {
           }
         ],
         temperature: 0,
+        top_p: 0.01,
         max_tokens: 2048
       }),
       { label: `extract:${page.url}` }
@@ -211,7 +212,7 @@ export async function extractEntities({ topic, entityType, columns, pages }) {
   // Flatten pages into chunks, cap at 3 to keep latency under 1 minute
   // const MAX_CHUNKS = 3;
   // const allChunks = pages.flatMap((page) => chunkPage(page)).slice(0, MAX_CHUNKS);
-  const MAX_CHUNKS = 4;
+  const MAX_CHUNKS = 3;
   const chunkedPages = pages.map((page) => chunkPage(page));
 
   const allChunks = [];
